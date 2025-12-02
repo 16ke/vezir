@@ -271,8 +271,10 @@ export default function TasksPage() {
       try {
         const [tasksResponse, categoriesResponse] = await Promise.all([
           fetch("/api/tasks", { 
-            cache: 'force-cache' as RequestCache,
-            next: { tags: ['tasks'] }
+            cache: 'no-store', // FIXED: Changed from 'force-cache'
+            headers: {
+              'Cache-Control': 'no-cache'
+            }
           }),
           fetch("/api/categories", { 
             cache: 'force-cache' as RequestCache,

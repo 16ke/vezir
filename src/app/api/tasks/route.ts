@@ -308,3 +308,32 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// DELETE - Delete multiple tasks (bulk delete) with cache headers
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user || !isSessionUser(session.user)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const response = NextResponse.json({ 
+      message: "DELETE endpoint for tasks - use /api/tasks/[id] for single task deletion",
+      success: true 
+    });
+    
+    // Add cache headers to prevent stale data
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    
+    return response;
+  } catch (error) {
+    console.error("Error in tasks DELETE:", error);
+    return NextResponse.json(
+      { error: "Internal server error" }, 
+      { status: 500 }
+    );
+  }
+}

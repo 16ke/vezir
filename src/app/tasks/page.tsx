@@ -366,27 +366,43 @@ export default function TasksPage() {
       return;
     }
 
+    // Store the task being deleted for possible restoration
+    const taskToDelete = tasks.find(t => t.id === taskId);
+    
+    // Optimistic update: remove from UI immediately
+    setTasks((prev: Task[]) => prev.filter(task => task.id !== taskId));
+    setSelectedTasks((prev: Set<string>) => {
+      const newSelected = new Set(prev);
+      newSelected.delete(taskId);
+      return newSelected;
+    });
+
     try {
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: "DELETE",
       });
 
-      if (response.ok) {
-        setTasks((prev: Task[]) => prev.filter(task => task.id !== taskId));
-        setSelectedTasks((prev: Set<string>) => {
-          const newSelected = new Set(prev);
-          newSelected.delete(taskId);
-          return newSelected;
-        });
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
         alert(`Error: ${errorData.error || "Failed to delete task"}`);
+        
+        // Restore task on error
+        if (taskToDelete) {
+          setTasks((prev: Task[]) => [...prev, taskToDelete]);
+        }
       }
+      // No need to do anything on success since we already updated optimistically
+      
     } catch (error) {
       console.error("Error deleting task:", error);
       alert("Failed to delete task.");
+      
+      // Restore task on error
+      if (taskToDelete) {
+        setTasks((prev: Task[]) => [...prev, taskToDelete]);
+      }
     }
-  }, []);
+  }, [tasks]);
 
   const currentFilters: ExportFilters = useMemo(() => ({
     status: statusFilter,

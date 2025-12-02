@@ -194,11 +194,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
+    // FIX: Filter out null/undefined values from categoryIds
+    const validCategoryIds = Array.isArray(categoryIds) 
+      ? categoryIds.filter(id => id !== null && id !== undefined && id !== '')
+      : [];
+
     // Validate categories belong to the user if provided
-    if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+    if (validCategoryIds.length > 0) {
       const userCategories = await prisma.category.findMany({
         where: {
-          id: { in: categoryIds },
+          id: { in: validCategoryIds },
           userId: session.user.id
         },
         select: {
@@ -206,7 +211,7 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      if (userCategories.length !== categoryIds.length) {
+      if (userCategories.length !== validCategoryIds.length) {
         return NextResponse.json(
           { error: "Some categories do not exist or don't belong to you" },
           { status: 400 }
@@ -214,7 +219,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // FIXED: Simplified transaction without explicit PrismaClient type
+    // Create task with categories
     const task = await prisma.$transaction(async (tx) => {
       const newTask = await tx.task.create({
         data: {
@@ -244,9 +249,9 @@ export async function POST(request: NextRequest) {
       });
 
       // Create category relations if categories are provided
-      if (Array.isArray(categoryIds) && categoryIds.length > 0) {
+      if (validCategoryIds.length > 0) {
         await tx.taskCategory.createMany({
-          data: categoryIds.map((categoryId: string) => ({
+          data: validCategoryIds.map((categoryId: string) => ({
             taskId: newTask.id,
             categoryId: categoryId
           }))
@@ -287,7 +292,7 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to create task");
     }
 
-    // FIXED: Remove the type guard and use direct transformation
+    // Transform the task for response
     const taskWithCategories = transformTask(task as TaskWithCategories);
     
     console.log("API: Task created successfully with categories");

@@ -181,13 +181,10 @@ export async function PUT(
 
     const { title, description, status, priority, dueDate, categoryIds = [] } = body;
 
-    // Validate categoryIds is an array
-    if (!Array.isArray(categoryIds)) {
-      return NextResponse.json(
-        { error: "categoryIds must be an array" }, 
-        { status: 400 }
-      );
-    }
+    // FIX: Filter out null/undefined values from categoryIds
+    const validCategoryIds = Array.isArray(categoryIds) 
+      ? categoryIds.filter(id => id !== null && id !== undefined && id !== '')
+      : [];
 
     // Check if task exists and belongs to user
     const existingTask = await prisma.task.findUnique({
@@ -205,10 +202,10 @@ export async function PUT(
     }
 
     // Validate categories belong to the user if provided
-    if (categoryIds.length > 0) {
+    if (validCategoryIds.length > 0) {
       const userCategories = await prisma.category.findMany({
         where: {
-          id: { in: categoryIds },
+          id: { in: validCategoryIds },
           userId: userId
         },
         select: {
@@ -216,7 +213,7 @@ export async function PUT(
         }
       });
 
-      if (userCategories.length !== categoryIds.length) {
+      if (userCategories.length !== validCategoryIds.length) {
         return NextResponse.json(
           { error: "Some categories do not exist or don't belong to you" },
           { status: 400 }
@@ -244,15 +241,15 @@ export async function PUT(
           status: status || "TODO",
           priority: priority || "MEDIUM",
           dueDate: dueDate ? new Date(dueDate) : null,
-          categories: {
-            create: categoryIds.map((categoryId: string) => ({
+          categories: validCategoryIds.length > 0 ? {
+            create: validCategoryIds.map((categoryId: string) => ({
               category: {
                 connect: {
                   id: categoryId
                 }
               }
             }))
-          }
+          } : undefined // Only create if there are categories
         },
         select: {
           id: true,

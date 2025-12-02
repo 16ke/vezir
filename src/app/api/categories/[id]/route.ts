@@ -45,16 +45,18 @@ export async function GET(
 ) {
   try {
     const { id: categoryId } = await params;
-    const session = await getServerSession(authOptions as any);
+    const session = await getServerSession(authOptions);
     
     if (!session?.user || !isSessionUser(session.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
+
     const category = await prisma.category.findFirst({
       where: {
         id: categoryId,
-        user: { email: session.user.email || undefined }
+        userId: userId
       },
       select: {
         id: true,
@@ -105,12 +107,13 @@ export async function PUT(
 ) {
   try {
     const { id: categoryId } = await params;
-    const session = await getServerSession(authOptions as any);
+    const session = await getServerSession(authOptions);
     
     if (!session?.user || !isSessionUser(session.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const body = await request.json();
 
     if (!body.name?.trim()) {
@@ -125,7 +128,7 @@ export async function PUT(
       const category = await tx.category.findFirst({
         where: {
           id: categoryId,
-          user: { email: session!.user!.email || undefined }
+          userId: userId
         }
       });
 
@@ -180,34 +183,37 @@ export async function DELETE(
 ) {
   try {
     const { id: categoryId } = await params;
-    const session = await getServerSession(authOptions as any);
+    const session = await getServerSession(authOptions);
     
     if (!session?.user || !isSessionUser(session.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
+
     await prisma.$transaction(async (tx) => {
       const category = await tx.category.findFirst({
         where: {
           id: categoryId,
-          user: { email: session!.user!.email || undefined }
+          userId: userId
         }
       });
 
       if (!category) throw new Error('Category not found');
 
-      const taskCount = await tx.taskCategory.count({
+      // First, disconnect all tasks from this category
+      await tx.taskCategory.deleteMany({
         where: { categoryId }
       });
 
-      if (taskCount > 0) {
-        throw new Error('Cannot delete category with associated tasks');
-      }
-
+      // Now delete the category itself
       await tx.category.delete({ where: { id: categoryId } });
     });
 
-    return NextResponse.json({ message: 'Category deleted successfully' });
+    return NextResponse.json({ 
+      message: 'Category deleted successfully',
+      success: true 
+    });
 
   } catch (error) {
     console.error('Error deleting category:', error);
@@ -215,9 +221,6 @@ export async function DELETE(
     if (error instanceof Error) {
       if (error.message === 'Category not found') {
         return NextResponse.json({ error: 'Category not found' }, { status: 404 });
-      }
-      if (error.message.includes('associated tasks')) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
       }
     }
 

@@ -20,6 +20,7 @@ export default function CategoriesPage() {
   const [newCategoryColor, setNewCategoryColor] = useState("#3b82f6");
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function CategoriesPage() {
       if (response.ok) {
         setNewCategoryName("");
         setNewCategoryColor("#3b82f6");
-        fetchCategories();
+        fetchCategories(); // Refresh the list
       } else {
         const errorData = await response.json();
         alert(`Error: ${errorData.error || "Failed to create category"}`);
@@ -74,24 +75,36 @@ export default function CategoriesPage() {
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm("Are you sure you want to delete this category? This will remove it from all tasks.")) {
+    if (!confirm("Are you sure you want to delete this category? This will remove it from all associated tasks.")) {
       return;
     }
+
+    // Optimistic update: remove from UI immediately
+    setCategories(prev => prev.filter(cat => cat.id !== categoryId));
+    setDeletingId(categoryId);
 
     try {
       const response = await fetch(`/api/categories/${categoryId}`, {
         method: "DELETE",
       });
 
-      if (response.ok) {
-        fetchCategories();
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
         alert(`Error: ${errorData.error || "Failed to delete category"}`);
+        
+        // Re-fetch if error to restore the category
+        fetchCategories();
       }
+      // No need to do anything on success since we already updated optimistically
+      
     } catch (error) {
       console.error("Error deleting category:", error);
       alert("Failed to delete category");
+      
+      // Re-fetch on error
+      fetchCategories();
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -186,7 +199,9 @@ export default function CategoriesPage() {
               {categories.map((category) => (
                 <div
                   key={category.id}
-                  className="flex items-center justify-between p-4 rounded-lg hover:bg-surface transition-colors border-gold-lg"
+                  className={`flex items-center justify-between p-4 rounded-lg hover:bg-surface transition-colors border-gold-lg ${
+                    deletingId === category.id ? 'opacity-50' : ''
+                  }`}
                 >
                   <div className="flex items-center space-x-4">
                     <div
@@ -208,21 +223,20 @@ export default function CategoriesPage() {
                   
                   <button
                     onClick={() => handleDeleteCategory(category.id)}
-                    disabled={category.taskCount > 0}
-                    className={`p-2 transition-colors border border-gold-lg rounded ${
-                      category.taskCount > 0 
-                        ? 'text-gray-400 cursor-not-allowed' 
-                        : 'text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300'
-                    }`}
-                    title={
-                      category.taskCount > 0 
-                        ? "Cannot delete category with tasks" 
-                        : "Delete category"
-                    }
+                    disabled={deletingId === category.id}
+                    className="p-2 transition-colors border border-gold-lg rounded text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50"
+                    title="Delete category"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    {deletingId === category.id ? (
+                      <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    )}
                   </button>
                 </div>
               ))}

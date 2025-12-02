@@ -42,7 +42,9 @@ export default function CategoryModal({
       });
 
       if (response.ok) {
-        const newCategory = await response.json();
+        const data = await response.json();
+        // FIX: Handle both formats - { category: ... } or direct category
+        const newCategory = data.category || data;
         onCategoryCreated(newCategory);
         setName("");
         setColor("#3b82f6");
